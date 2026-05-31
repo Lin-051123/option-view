@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>option view | Options open interest and volume</title>
+    <meta name="description" content="option view tracks real options open interest and volume by symbol, expiration, calls, and puts with live refresh from a market-data adapter.">
+    <meta name="robots" content="index, follow">
+    <meta property="og:title" content="option view">
+    <meta property="og:description" content="Options open interest and volume dashboard for calls and puts.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="__SITE_ORIGIN__/">
+    <link rel="canonical" href="__SITE_ORIGIN__/">
+    <link rel="stylesheet" href="./styles.css">
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "name": "option view",
+        "applicationCategory": "FinanceApplication",
+        "description": "Options open interest and volume dashboard for calls and puts.",
+        "url": "__SITE_ORIGIN__/"
+      }
+    </script>
+  </head>
+  <body>
+    <main class="app-shell">
+      <aside class="control-panel" aria-label="Controls">
+        <div class="brand">
+          <span class="brand-icon" aria-hidden="true"></span>
+          <div>
+            <h1>option view</h1>
+            <p>Live options open interest and volume</p>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="symbolSearch">Search stocks</label>
+          <div class="search-row">
+            <input id="symbolSearch" list="symbolSuggestions" type="search" autocomplete="off" placeholder="Search by ticker or company name">
+            <datalist id="symbolSuggestions"></datalist>
+            <button id="addSymbolButton" class="icon-button" type="button" aria-label="Add symbol" title="Add symbol">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="symbolsInput">Watchlist</label>
+          <textarea id="symbolsInput" spellcheck="false">NVDA, TSLA, AAPL, AMD, MSFT, AMZN, META, PLTR, ASTS, MU, INTC, COIN, MSTR, NFLX, GOOGL, AVGO, ARM, SMCI, APP, RIVN, SOFI, HOOD, JPM, BAC, XOM</textarea>
+        </div>
+
+        <div class="field-grid">
+          <div class="field">
+            <label for="symbolSelect">Current symbol</label>
+            <select id="symbolSelect"></select>
+          </div>
+          <div class="field">
+            <label for="metricSelect">Metric</label>
+            <select id="metricSelect">
+              <option value="openInterest">Open Interest</option>
+              <option value="buyVolume">Volume</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="field-grid">
+          <div class="field">
+            <label for="expirySelect">Expiration</label>
+            <select id="expirySelect"></select>
+          </div>
+          <div class="field">
+            <label for="sourceSelect">Data source</label>
+            <select id="sourceSelect">
+              <option value="auto">Live API first</option>
+              <option value="demo">Demo data (synthetic)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="live-row">
+          <label class="switch" for="autoRefresh">
+            <input id="autoRefresh" type="checkbox" checked>
+            <span></span>
+          </label>
+          <div>
+            <strong>Live refresh</strong>
+            <p>Options refresh every 60 seconds; selected stock quote checks every 5 seconds.</p>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="topCount">Rows shown <span id="topCountValue">20</span></label>
+          <input id="topCount" type="range" min="8" max="30" step="1" value="20">
+        </div>
+
+        <div class="actions">
+          <button id="refreshButton" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 0 1-14.9 4m0 0H3m2.1 0v-4M4 12A8 8 0 0 1 18.9 8m0 0H21m-2.1 0v4"></path></svg>
+            Refresh
+          </button>
+          <button id="resetButton" class="icon-button" type="button" aria-label="Reset" title="Reset">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7M3 4v6h6"></path></svg>
+          </button>
+        </div>
+
+        <footer>
+          <span id="sourceBadge">Demo</span>
+          <span id="updatedAt">Waiting</span>
+        </footer>
+      </aside>
+
+      <section class="report-wrap" aria-label="Options report">
+        <article class="report-card">
+          <header class="report-header">
+            <div>
+              <p class="muted-title" id="reportKicker">Open Interest Stats</p>
+              <h2 id="reportTitle">Open Interest Stats</h2>
+              <p class="quote-line" id="selectedQuote">Price N/A</p>
+            </div>
+            <a id="tradingViewLink" href="#" target="_blank" rel="noreferrer" title="Open TradingView">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8"></path><path d="M14 17H7V7"></path></svg>
+            </a>
+          </header>
+
+          <p class="subline" id="summaryLine"></p>
+          <p class="data-notice" id="dataNotice"></p>
+
+          <dl class="summary-table" id="summaryTable"></dl>
+
+          <section class="candlestick-section" aria-label="5 day candlestick chart">
+            <div class="candlestick-header">
+              <div>
+                <h3 id="candleTitle">Continuous 5D Candlestick Chart</h3>
+                <p class="subline" id="candleMeta">Loading TradingView chart.</p>
+              </div>
+            </div>
+            <div class="candlestick-chart" id="candleChart"></div>
+          </section>
+
+          <section class="ranking-section" aria-label="Option volume ranking">
+            <div class="ranking-header">
+              <div>
+                <h3>Option Volume Ranking</h3>
+                <p class="subline">Top 25 stocks ranked by total option volume across all loaded expirations.</p>
+              </div>
+            </div>
+            <div class="ranking-scroll">
+              <table class="ranking-table">
+                <thead>
+                  <tr>
+                    <th>Symbol</th>
+                    <th>Name</th>
+                    <th class="numeric">Option Volume</th>
+                    <th class="numeric call-column">Call Volume</th>
+                    <th class="numeric put-column">Put Volume</th>
+                    <th class="numeric">Volume Put-Call Ratio</th>
+                    <th class="numeric">Market Cap</th>
+                  </tr>
+                </thead>
+                <tbody id="rankingBody"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="chart-section">
+            <h3 id="chartTitle">Highest Open Interest Options</h3>
+            <p class="subline" id="chartLine"></p>
+            <div class="split-charts">
+              <section class="side-panel put-panel" aria-label="Highest put options">
+                <h4>Put Options</h4>
+                <div class="bar-chart" id="putChart"></div>
+                <div class="axis">
+                  <span>0</span>
+                  <span id="putAxisMid">20K</span>
+                  <span id="putAxisMax">40K</span>
+                </div>
+              </section>
+              <section class="side-panel call-panel" aria-label="Highest call options">
+                <h4>Call Options</h4>
+                <div class="bar-chart" id="callChart"></div>
+                <div class="axis">
+                  <span>0</span>
+                  <span id="callAxisMid">20K</span>
+                  <span id="callAxisMax">40K</span>
+                </div>
+              </section>
+            </div>
+            <div class="axis-label" id="axisLabel">Open Interest</div>
+          </section>
+
+          <nav class="symbol-tabs" id="symbolTabs" aria-label="Quick symbol switcher"></nav>
+        </article>
+      </section>
+    </main>
+
+    <script src="./app.js" defer></script>
+  </body>
+</html>
