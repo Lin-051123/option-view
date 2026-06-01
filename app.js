@@ -151,6 +151,7 @@ const dom = {
 
 let searchTimer;
 let tradingViewScriptPromise;
+let focusedSymbolRequestId = 0;
 
 function parseSymbols(value) {
   return [...new Set(value
@@ -162,6 +163,28 @@ function parseSymbols(value) {
 
 function syncSymbolsInput() {
   dom.symbolsInput.value = state.symbols.join(", ");
+}
+
+function placeholderRow(symbol) {
+  const profile = LOCAL_SYMBOLS.find((item) => item.symbol === symbol);
+  return {
+    symbol,
+    name: profile?.name || symbol,
+    exchange: profile?.exchange || "NASDAQ",
+    price: 0,
+    change: 0,
+    marketCap: null,
+    contracts: [],
+    loading: true
+  };
+}
+
+function mergeRows(incomingRows) {
+  const rowsBySymbol = new Map(state.rows.map((row) => [row.symbol, row]));
+  incomingRows.forEach((row) => rowsBySymbol.set(row.symbol, row));
+  return state.symbols
+    .map((symbol) => rowsBySymbol.get(symbol))
+    .filter(Boolean);
 }
 
 function seededRandom(seed) {
@@ -391,7 +414,7 @@ async function loadData() {
       state.error = "";
     } else {
       const payload = await fetchBackendData(state.symbols);
-      state.rows = payload.data;
+      state.rows = mergeRows(payload.data);
       state.sourceLabel = payload.provider.includes("cboe") ? "Cboe delayed" : payload.provider;
       state.sourceTimestamp = payload.refreshedAt;
       state.error = "";
@@ -544,9 +567,10 @@ async function loadSelectedQuote() {
   if (state.source === "demo" || state.quoteLoading || !state.selectedSymbol) {
     return;
   }
+  const requestedSymbol = state.selectedSymbol;
   state.quoteLoading = true;
   try {
-    const quote = await fetchSelectedQuote(state.selectedSymbol);
+    const quote = await fetchSelectedQuote(requestedSymbol);
     const quoteData = {
       price: finiteNumber(quote.price),
       change: finiteNumber(quote.change),
@@ -561,18 +585,23 @@ async function loadSelectedQuote() {
       quoteWarning: quote.warning || ""
     };
     state.quotes[quote.symbol] = quoteData;
-    const row = state.rows.find((item) => item.symbol === state.selectedSymbol);
+    const row = state.rows.find((item) => item.symbol === quote.symbol);
     if (row) {
       Object.assign(row, quoteData);
     }
-    renderSelectedQuote(row || { symbol: quote.symbol, ...quoteData });
+    if (state.selectedSymbol === quote.symbol) {
+      renderSelectedQuote(row || { symbol: quote.symbol, ...quoteData });
+    }
   } catch (error) {
     const row = selectedRow();
-    if (row) {
+    if (row?.symbol === requestedSymbol) {
       dom.selectedQuote.title = `Quote update failed: ${error.message}`;
     }
   } finally {
     state.quoteLoading = false;
+    if (state.selectedSymbol !== requestedSymbol) {
+      loadSelectedQuote();
+    }
   }
 }
 
@@ -685,6 +714,10 @@ function strong(text) {
 }
 
 function renderDataNotice(row) {
+  if (row.loading) {
+    dom.dataNotice.textContent = `Loading delayed options-chain data for ${row.symbol}...`;
+    return;
+  }
   const timestamp = state.sourceTimestamp ? ` Refreshed ${new Date(state.sourceTimestamp).toLocaleString("en-US")}.` : "";
   const disclaimer = state.source === "demo"
     ? "Demo mode uses synthetic data and should not be used for trading."
@@ -957,18 +990,61 @@ async function updateSymbolSuggestions() {
   });
 }
 
+async function loadFocusedSymbol(symbol) {
+  if (state.source === "demo") {
+    loadData();
+    return;
+  }
+  const requestId = focusedSymbolRequestId + 1;
+  focusedSymbolRequestId = requestId;
+  try {
+    const payload = await fetchBackendData([symbol]);
+    if (focusedSymbolRequestId !== requestId || !state.symbols.includes(symbol)) {
+      return;
+    }
+    const row = payload.data.find((item) => item.symbol === symbol);
+    if (!row) {
+      throw new Error(`No option chain returned for ${symbol}`);
+    }
+    state.rows = mergeRows([row]);
+    state.sourceLabel = payload.provider.includes("cboe") ? "Cboe delayed" : payload.provider;
+    state.sourceTimestamp = payload.refreshedAt;
+    state.error = "";
+  } catch (error) {
+    if (focusedSymbolRequestId !== requestId || !state.symbols.includes(symbol)) {
+      return;
+    }
+    const row = state.rows.find((item) => item.symbol === symbol) || placeholderRow(symbol);
+    row.loading = false;
+    row.error = error.message || `Unable to load delayed options-chain data for ${symbol}.`;
+    state.rows = mergeRows([row]);
+  } finally {
+    if (focusedSymbolRequestId === requestId && state.symbols.includes(symbol)) {
+      syncOptions();
+      render();
+      loadSelectedQuote();
+    }
+  }
+}
+
 function addSymbolFromSearch() {
   const [symbol] = parseSymbols(dom.symbolSearch.value);
   if (!symbol) {
     return;
   }
-  if (!state.symbols.includes(symbol)) {
-    state.symbols.push(symbol);
-  }
+  state.symbols = [symbol, ...state.symbols.filter((item) => item !== symbol)].slice(0, 25);
   state.selectedSymbol = symbol;
+  if (!state.rows.some((row) => row.symbol === symbol)) {
+    state.rows = mergeRows([placeholderRow(symbol)]);
+  } else {
+    state.rows = mergeRows([]);
+  }
   syncSymbolsInput();
   dom.symbolSearch.value = "";
-  loadData();
+  syncOptions();
+  render();
+  loadSelectedQuote();
+  loadFocusedSymbol(symbol);
 }
 
 function scheduleRefresh() {
