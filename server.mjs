@@ -394,7 +394,10 @@ function normalizeOptionContract(symbol, contract) {
     expirationType: "listed",
     label: `${symbol} ${expirationLabel} ${parsed.strike.toFixed(1)}${parsed.side === "call" ? "C" : "P"}`,
     openInterest: numberOrZero(contract.open_interest),
-    buyVolume: numberOrZero(contract.volume)
+    buyVolume: numberOrZero(contract.volume),
+    delta: numberOrZero(contract.delta),
+    gamma: numberOrZero(contract.gamma),
+    iv: numberOrZero(contract.iv)
   };
 }
 

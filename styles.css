@@ -288,7 +288,9 @@ footer {
 }
 
 .report-card {
-  width: min(100%, 1180px);
+  width: 100%;
+  max-width: 1180px;
+  min-width: 0;
   padding: 30px;
   background: var(--panel);
   border-radius: 12px;
@@ -408,6 +410,7 @@ footer {
 }
 
 .candlestick-section {
+  min-width: 0;
   margin-top: 32px;
   padding-top: 28px;
   border-top: 1px solid var(--line-strong);
@@ -429,12 +432,161 @@ footer {
   overflow: hidden;
 }
 
+.squeeze-section {
+  margin-top: 18px;
+}
+
+.squeeze-heading h4 {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.15;
+}
+
+.squeeze-heading p {
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.squeeze-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.signal-card {
+  --signal: #7f8791;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--signal);
+  border-radius: 8px;
+  background: #fbfcfd;
+}
+
+.signal-card.quiet {
+  --signal: #2f80ed;
+}
+
+.signal-card.watch {
+  --signal: #da8b10;
+}
+
+.signal-card.elevated {
+  --signal: #d13f50;
+}
+
+.signal-card-header,
+.signal-score-row,
+.signal-metrics {
+  display: flex;
+  align-items: center;
+}
+
+.signal-card-header {
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.signal-card h5 {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.2;
+}
+
+.signal-badge {
+  flex: 0 0 auto;
+  padding: 4px 7px;
+  color: var(--signal);
+  border: 1px solid color-mix(in srgb, var(--signal) 30%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--signal) 8%, #fff);
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.signal-score-row {
+  gap: 10px;
+  margin-top: 13px;
+}
+
+.signal-score-track {
+  height: 6px;
+  flex: 1;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e4e8ed;
+}
+
+.signal-score-track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--signal);
+}
+
+.signal-score-row strong {
+  color: var(--signal);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.signal-summary,
+.signal-note {
+  color: #5f6670;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.signal-summary {
+  min-height: 35px;
+  margin-top: 11px;
+}
+
+.signal-note {
+  margin-top: 10px;
+  color: var(--muted);
+}
+
+.signal-metrics {
+  gap: 14px;
+  margin-top: 12px;
+}
+
+.signal-metrics div {
+  min-width: 0;
+}
+
+.signal-metrics dt,
+.signal-metrics dd {
+  margin: 0;
+}
+
+.signal-metrics dt {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.signal-metrics dd {
+  margin-top: 3px;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+
 .tradingview-chart-host {
   width: 100%;
   height: 520px;
 }
 
 .ranking-section {
+  min-width: 0;
   margin-top: 34px;
 }
 
@@ -520,6 +672,7 @@ footer {
 }
 
 .chart-section {
+  min-width: 0;
   margin-top: 40px;
   padding-top: 30px;
   border-top: 1px solid var(--line-strong);
@@ -712,6 +865,10 @@ footer {
   }
 
   .split-charts {
+    grid-template-columns: 1fr;
+  }
+
+  .squeeze-grid {
     grid-template-columns: 1fr;
   }
 }

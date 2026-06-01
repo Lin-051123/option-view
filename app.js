@@ -135,6 +135,7 @@ const dom = {
   candleTitle: document.querySelector("#candleTitle"),
   candleMeta: document.querySelector("#candleMeta"),
   candleChart: document.querySelector("#candleChart"),
+  squeezeSignals: document.querySelector("#squeezeSignals"),
   rankingBody: document.querySelector("#rankingBody"),
   chartTitle: document.querySelector("#chartTitle"),
   chartLine: document.querySelector("#chartLine"),
@@ -364,7 +365,10 @@ function normalizeContract(symbol, contract) {
     expirationType: contract.expirationType || "weekly",
     label: contract.label || contract.contract || `${symbol} ${formatExpiryLabel(expiration)} ${strike.toFixed(1)}${side === "call" ? "C" : "P"}`,
     openInterest: finiteNumber(contract.openInterest ?? contract.oi),
-    buyVolume: finiteNumber(contract.buyVolume ?? contract.volume)
+    buyVolume: finiteNumber(contract.buyVolume ?? contract.volume),
+    delta: finiteNumber(contract.delta),
+    gamma: finiteNumber(contract.gamma),
+    iv: finiteNumber(contract.iv)
   };
 }
 
@@ -516,6 +520,7 @@ function render() {
   );
   renderDataNotice(row);
   renderSummary(label, callTotal, putTotal, total, ratio);
+  renderSqueezeAlerts(row);
   renderCandlestickChart(row);
   renderVolumeRanking();
 
@@ -591,6 +596,9 @@ async function loadSelectedQuote() {
     }
     if (state.selectedSymbol === quote.symbol) {
       renderSelectedQuote(row || { symbol: quote.symbol, ...quoteData });
+      if (row) {
+        renderSqueezeAlerts(row);
+      }
     }
   } catch (error) {
     const row = selectedRow();
@@ -747,6 +755,191 @@ function renderSummary(label, callTotal, putTotal, total, ratio) {
     row.append(term, description);
     dom.summaryTable.append(row);
   });
+}
+
+function renderSqueezeAlerts(row) {
+  dom.squeezeSignals.replaceChildren();
+  const contracts = currentContracts(row);
+  const liveQuote = state.quotes[row.symbol] || {};
+  const displayRow = { ...row, ...liveQuote };
+  const spot = finiteNumber(displayRow.price);
+  const calls = contracts.filter((contract) => contract.side === "call");
+  const puts = contracts.filter((contract) => contract.side === "put");
+  const callVolume = sumField(calls, "buyVolume");
+  const putVolume = sumField(puts, "buyVolume");
+  const callOpenInterest = sumField(calls, "openInterest");
+  const gammaAvailable = contracts.some((contract) => contract.gamma > 0);
+  const expiry = formatExpiryLabel(state.selectedExpiry);
+
+  if (!contracts.length || spot <= 0) {
+    renderSignalCard({
+      title: "Gamma Squeeze Watch",
+      level: "Waiting",
+      tone: "neutral",
+      summary: "Waiting for the selected options chain and stock quote.",
+      metrics: [["Expiration", expiry]]
+    });
+    renderSignalCard({
+      title: "Short Squeeze Pressure",
+      level: "Waiting",
+      tone: "neutral",
+      summary: "Waiting for delayed price and options activity.",
+      metrics: [["Signal type", "Proxy only"]]
+    });
+    return;
+  }
+
+  const callGammaExposure = calls.reduce((sum, contract) => sum + gammaExposure(contract, spot), 0);
+  const putGammaExposure = puts.reduce((sum, contract) => sum + gammaExposure(contract, spot), 0);
+  const nearbyCalls = calls.filter((contract) => contract.strike >= spot * 0.98 && contract.strike <= spot * 1.05);
+  const nearbyCallGammaExposure = nearbyCalls.reduce((sum, contract) => sum + gammaExposure(contract, spot), 0);
+  const nearbyCallShare = callGammaExposure ? nearbyCallGammaExposure / callGammaExposure : 0;
+  const callGammaShare = callGammaExposure + putGammaExposure
+    ? callGammaExposure / (callGammaExposure + putGammaExposure)
+    : 0;
+  const callPutVolumeRatio = putVolume ? callVolume / putVolume : callVolume ? 9.99 : 0;
+  const priceMomentum = clamp01(Math.max(0, finiteNumber(displayRow.change)) / 10);
+  const callVolumeDominance = clamp01((callPutVolumeRatio - 1) / 2);
+  const gammaScore = Math.round(100 * (
+    nearbyCallShare * 0.45
+    + callGammaShare * 0.30
+    + callVolumeDominance * 0.15
+    + priceMomentum * 0.10
+  ));
+  const callWall = [...calls]
+    .filter((contract) => contract.gamma > 0 && contract.openInterest > 0)
+    .sort((a, b) => gammaExposure(b, spot) - gammaExposure(a, spot))[0];
+  const gammaLevel = signalLevel(gammaScore, 68, 45);
+  renderSignalCard({
+    title: "Gamma Squeeze Watch",
+    level: gammaAvailable ? gammaLevel.label : "Unavailable",
+    tone: gammaAvailable ? gammaLevel.tone : "neutral",
+    score: gammaAvailable ? gammaScore : null,
+    summary: gammaAvailable
+      ? `${percent(nearbyCallShare)} of call gamma exposure sits from 2% below to 5% above spot for ${expiry}.`
+      : "Gamma values are not available for the selected options chain.",
+    metrics: [
+      ["Call wall", callWall ? currency(callWall.strike) : "N/A"],
+      ["Est. call GEX", compactCurrency(callGammaExposure)],
+      ["Call / Put vol.", `${callPutVolumeRatio.toFixed(2)}x`]
+    ],
+    note: "Uses Cboe delayed gamma and open interest. Dealer positioning is not supplied."
+  });
+
+  const callTurnover = callOpenInterest ? callVolume / callOpenInterest : 0;
+  const shortMomentum = clamp01(Math.max(0, finiteNumber(displayRow.change)) / 12);
+  const shortScore = Math.round(100 * (
+    shortMomentum * 0.65
+    + shortMomentum * clamp01((callPutVolumeRatio - 1) / 3) * 0.20
+    + shortMomentum * clamp01(callTurnover / 1.2) * 0.15
+  ));
+  const shortLevel = signalLevel(shortScore, 62, 36);
+  renderSignalCard({
+    title: "Short Squeeze Pressure",
+    level: shortLevel.label,
+    tone: shortLevel.tone,
+    score: shortScore,
+    summary: `${signedPercent(displayRow.change)} day move with ${callTurnover.toFixed(2)}x call-volume turnover.`,
+    metrics: [
+      ["Day move", signedPercent(displayRow.change)],
+      ["Call turnover", `${callTurnover.toFixed(2)}x`],
+      ["Stock volume", compact(finiteNumber(displayRow.quoteVolume))]
+    ],
+    note: "Proxy only. Short interest, float and borrow fee are not supplied by this feed."
+  });
+}
+
+function renderSignalCard({ title, level, tone, score = null, summary, metrics, note = "" }) {
+  const card = document.createElement("article");
+  card.className = `signal-card ${tone}`;
+
+  const header = document.createElement("div");
+  header.className = "signal-card-header";
+  const heading = document.createElement("h5");
+  heading.textContent = title;
+  const badge = document.createElement("span");
+  badge.className = "signal-badge";
+  badge.textContent = level;
+  header.append(heading, badge);
+
+  const scoreRow = document.createElement("div");
+  scoreRow.className = "signal-score-row";
+  const track = document.createElement("div");
+  track.className = "signal-score-track";
+  const fill = document.createElement("span");
+  fill.style.width = `${score ?? 0}%`;
+  track.append(fill);
+  const value = document.createElement("strong");
+  value.textContent = score === null ? "N/A" : `${score}/100`;
+  scoreRow.append(track, value);
+
+  const description = document.createElement("p");
+  description.className = "signal-summary";
+  description.textContent = summary;
+
+  const metricList = document.createElement("dl");
+  metricList.className = "signal-metrics";
+  metrics.forEach(([name, metric]) => {
+    const item = document.createElement("div");
+    const term = document.createElement("dt");
+    term.textContent = name;
+    const detail = document.createElement("dd");
+    detail.textContent = metric;
+    item.append(term, detail);
+    metricList.append(item);
+  });
+
+  card.append(header, scoreRow, description, metricList);
+  if (note) {
+    const footnote = document.createElement("p");
+    footnote.className = "signal-note";
+    footnote.textContent = note;
+    card.append(footnote);
+  }
+  dom.squeezeSignals.append(card);
+}
+
+function gammaExposure(contract, spot) {
+  return Math.abs(finiteNumber(contract.gamma)) * finiteNumber(contract.openInterest) * 100 * spot * spot * 0.01;
+}
+
+function sumField(contracts, field) {
+  return contracts.reduce((sum, contract) => sum + finiteNumber(contract[field]), 0);
+}
+
+function clamp01(value) {
+  return Math.max(0, Math.min(1, finiteNumber(value)));
+}
+
+function signalLevel(score, highThreshold, watchThreshold) {
+  if (score >= highThreshold) {
+    return { label: "Elevated", tone: "elevated" };
+  }
+  if (score >= watchThreshold) {
+    return { label: "Watch", tone: "watch" };
+  }
+  return { label: "Quiet", tone: "quiet" };
+}
+
+function percent(value) {
+  return `${Math.round(clamp01(value) * 100)}%`;
+}
+
+function signedPercent(value) {
+  const numeric = finiteNumber(value);
+  return `${numeric > 0 ? "+" : ""}${numeric.toFixed(2)}%`;
+}
+
+function compactCurrency(value) {
+  if (!Number.isFinite(value) || value <= 0) {
+    return "N/A";
+  }
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    notation: "compact",
+    maximumFractionDigits: 1
+  }).format(value);
 }
 
 function renderVolumeRanking() {
@@ -926,6 +1119,7 @@ function renderEmpty() {
   dom.summaryTable.replaceChildren();
   dom.rankingBody.replaceChildren();
   dom.candleChart.replaceChildren();
+  dom.squeezeSignals.replaceChildren();
   dom.putChart.replaceChildren();
   dom.callChart.replaceChildren();
   dom.symbolTabs.replaceChildren();
