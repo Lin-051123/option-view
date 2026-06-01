@@ -433,18 +433,29 @@ async function handleSitemap(request, response) {
   response.end(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n  <url>\n    <loc>${escapeXml(origin)}/</loc>\n    <changefreq>hourly</changefreq>\n    <priority>1.0</priority>\n  </url>\n</urlset>\n`);
 }
 
-async function fetchJson(url, headers = {}) {
-  const response = await fetch(url, {
-    headers: {
-      accept: "application/json",
-      "user-agent": "option-view/1.0",
-      ...headers
+async function fetchJson(url, headers = {}, retries = 3) {
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    const response = await fetch(url, {
+      headers: {
+        accept: "application/json",
+        "user-agent": "option-view/1.0",
+        ...headers
+      }
+    });
+    if (response.ok) {
+      return response.json();
     }
-  });
-  if (!response.ok) {
+    if (response.status === 429 && attempt < retries) {
+      await delay(800 * (2 ** attempt) + Math.round(Math.random() * 250));
+      continue;
+    }
     throw new Error(`Upstream ${response.status} for ${url}`);
   }
-  return response.json();
+  throw new Error(`Unable to load ${url}`);
+}
+
+function delay(milliseconds) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
 function sendJson(response, status, body) {
