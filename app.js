@@ -4,6 +4,7 @@ const DEFAULT_SYMBOLS = [
   "SOFI", "HOOD", "JPM", "BAC", "XOM"
 ];
 const REFRESH_MS = 60000;
+const FUTU_REFRESH_MS = 15000;
 const QUOTE_REFRESH_MS = 5000;
 const TRADINGVIEW_SCRIPT_URL = "https://s3.tradingview.com/tv.js";
 const LOCAL_SYMBOLS = [
@@ -121,6 +122,7 @@ const dom = {
   expirySelect: document.querySelector("#expirySelect"),
   sourceSelect: document.querySelector("#sourceSelect"),
   autoRefresh: document.querySelector("#autoRefresh"),
+  refreshHint: document.querySelector("#refreshHint"),
   topCount: document.querySelector("#topCount"),
   topCountValue: document.querySelector("#topCountValue"),
   refreshButton: document.querySelector("#refreshButton"),
@@ -165,6 +167,15 @@ function parseSymbols(value) {
 
 function syncSymbolsInput() {
   dom.symbolsInput.value = state.symbols.join(", ");
+}
+
+function configureLocalDataSources() {
+  const isLocalhost = ["localhost", "127.0.0.1", "::1"].includes(window.location.hostname);
+  const futuOption = [...dom.sourceSelect.options].find((option) => option.value === "futu");
+  if (futuOption && !isLocalhost) {
+    futuOption.disabled = true;
+    futuOption.textContent = "Futu OpenD (local only)";
+  }
 }
 
 function placeholderRow(symbol) {
@@ -286,6 +297,7 @@ async function fetchBackendData(symbols) {
   const params = new URLSearchParams({
     symbols: symbols.join(","),
     vendor: "tradingview",
+    source: state.source === "futu" ? "futu" : "cboe",
     maxExpirations: "52",
     t: String(Date.now())
   });
@@ -310,6 +322,7 @@ async function fetchBackendData(symbols) {
 async function fetchSelectedQuote(symbol) {
   const params = new URLSearchParams({
     symbol,
+    source: state.source === "futu" ? "futu" : "cboe",
     t: String(Date.now())
   });
   const response = await fetch(`./api/quote?${params.toString()}`, {
@@ -420,7 +433,7 @@ async function loadData() {
     } else {
       const payload = await fetchBackendData(state.symbols);
       state.rows = mergeRows(payload.data);
-      state.sourceLabel = payload.provider.includes("cboe") ? "Cboe delayed" : payload.provider;
+      state.sourceLabel = sourceLabelFor(payload.provider);
       state.sourceTimestamp = payload.refreshedAt;
       state.error = "";
     }
@@ -434,6 +447,7 @@ async function loadData() {
     dom.refreshButton.disabled = false;
     syncOptions();
     render();
+    scheduleRefresh();
   }
 }
 
@@ -557,7 +571,9 @@ function renderSelectedQuote(row) {
     : "";
   const change = [priceChange, percentChange].filter(Boolean).join(" ");
   const quoteTime = displayRow.lastTradeTime || displayRow.quoteTimestamp;
-  const source = displayRow.quoteSource === "cboe-options-chain-cache"
+  const source = displayRow.quoteSource === "futu-opend-realtime-quote"
+    ? "Futu OpenD real-time quote"
+    : displayRow.quoteSource === "cboe-options-chain-cache"
     ? "Cboe options-chain quote cache"
     : "Cboe delayed stock quote";
   const stale = displayRow.quoteStale
@@ -728,7 +744,9 @@ function renderDataNotice(row) {
     return;
   }
   const timestamp = state.sourceTimestamp ? ` Refreshed ${new Date(state.sourceTimestamp).toLocaleString("en-US")}.` : "";
-  const disclaimer = state.source === "demo"
+  const disclaimer = state.source === "futu"
+    ? "Futu OpenD mode uses your local Futu connection. Real-time availability depends on your Futu market-data permissions; option ranking refreshes from subscribed option quotes."
+    : state.source === "demo"
     ? "Demo mode uses synthetic data and should not be used for trading."
     : "Live mode uses Cboe delayed options-chain data; no synthetic fallback is shown.";
   const rowError = row.error ? ` ${row.error}` : "";
@@ -1244,9 +1262,31 @@ function addSymbolFromSearch() {
 
 function scheduleRefresh() {
   window.clearInterval(state.refreshTimer);
+  updateRefreshHint();
   if (dom.autoRefresh.checked) {
-    state.refreshTimer = window.setInterval(loadData, REFRESH_MS);
+    state.refreshTimer = window.setInterval(loadData, refreshIntervalMs());
   }
+}
+
+function refreshIntervalMs() {
+  return state.source === "futu" ? FUTU_REFRESH_MS : REFRESH_MS;
+}
+
+function sourceLabelFor(provider) {
+  const value = String(provider || "").toLowerCase();
+  if (value.includes("futu")) {
+    return "Futu OpenD real-time";
+  }
+  if (value.includes("cboe")) {
+    return "Cboe delayed";
+  }
+  return provider || "Live API";
+}
+
+function updateRefreshHint() {
+  dom.refreshHint.textContent = state.source === "futu"
+    ? `Futu option ranking refreshes every ${FUTU_REFRESH_MS / 1000} seconds; selected stock quote checks every ${QUOTE_REFRESH_MS / 1000} seconds.`
+    : `Options refresh every ${REFRESH_MS / 1000} seconds; selected stock quote checks every ${QUOTE_REFRESH_MS / 1000} seconds.`;
 }
 
 function scheduleQuoteRefresh() {
@@ -1281,6 +1321,7 @@ dom.expirySelect.addEventListener("change", (event) => {
 });
 dom.sourceSelect.addEventListener("change", (event) => {
   state.source = event.target.value;
+  scheduleRefresh();
   loadData();
 });
 dom.autoRefresh.addEventListener("change", scheduleRefresh);
@@ -1301,6 +1342,7 @@ dom.symbolSearch.addEventListener("keydown", (event) => {
 });
 dom.addSymbolButton.addEventListener("click", addSymbolFromSearch);
 
+configureLocalDataSources();
 syncSymbolsInput();
 updateSymbolSuggestions();
 scheduleRefresh();

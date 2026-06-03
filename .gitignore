@@ -4,3 +4,4 @@ node_modules/
 logs/
 scripts/
 com.optionview.local.plist
+__pycache__/

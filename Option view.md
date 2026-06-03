@@ -22,6 +22,40 @@ http://localhost:4173
 
 The browser refreshes option data every 60 seconds when Live API mode is enabled. Live mode does not silently replace failed API requests with synthetic values.
 
+## Futu OpenD Real-Time Mode
+
+`Futu OpenD (local)` is for running the dashboard on the same Mac as Futu OpenD. The public Render site cannot reach software running on your Mac, so Futu mode is a local workflow.
+
+Requirements:
+
+1. Install and sign in to Futu OpenD.
+2. Keep OpenD running on `127.0.0.1:11111`.
+3. Install the Python SDK:
+
+```bash
+python3 -m pip install -r requirements-futu.txt
+```
+
+4. Start the dashboard locally:
+
+```bash
+node server.mjs
+```
+
+5. Open `http://localhost:4173` and choose `Futu OpenD (local)` in Data source.
+
+Useful environment variables:
+
+```bash
+FUTU_HOST=127.0.0.1
+FUTU_PORT=11111
+FUTU_PYTHON=python3
+FUTU_MAX_EXPIRATIONS=6
+FUTU_MAX_OPTION_CONTRACTS=240
+```
+
+Futu mode polls real-time Futu quotes every 5 seconds for the selected stock and refreshes the option-volume ranking every 15 seconds. U.S. option volume requires OPRA real-time permission in Futu. The bridge caps option subscriptions by expiration and contract count to avoid exhausting OpenD subscription quota.
+
 ## Public Google Indexing
 
 This app is prepared for Google indexing, but Google cannot index `localhost`. To make it searchable:
@@ -90,6 +124,8 @@ Expected options response:
 ## Data Source Notes
 
 `server.mjs` uses Yahoo Finance search for user-entered symbol lookup, Nasdaq summary data for market cap, and Cboe delayed quotes for option-chain reads. The option numbers are real delayed market-data values from the upstream endpoint; they are not real-time exchange feeds and should be labeled as delayed.
+
+When `source=futu` is passed to `/api/quote` or `/api/options-volume`, `server.mjs` calls `futu_bridge.py`, which connects to local Futu OpenD and returns real-time Futu quote snapshots when the account has the required market-data permissions.
 
 For production real-time data:
 
