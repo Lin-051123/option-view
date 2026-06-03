@@ -4,7 +4,6 @@ const DEFAULT_SYMBOLS = [
   "SOFI", "HOOD", "JPM", "BAC", "XOM"
 ];
 const REFRESH_MS = 60000;
-const FUTU_REFRESH_MS = 15000;
 const QUOTE_REFRESH_MS = 5000;
 const TRADINGVIEW_SCRIPT_URL = "https://s3.tradingview.com/tv.js";
 const LOCAL_SYMBOLS = [
@@ -169,13 +168,12 @@ function syncSymbolsInput() {
   dom.symbolsInput.value = state.symbols.join(", ");
 }
 
-function configureLocalDataSources() {
-  const isLocalhost = ["localhost", "127.0.0.1", "::1"].includes(window.location.hostname);
-  const futuOption = [...dom.sourceSelect.options].find((option) => option.value === "futu");
-  if (futuOption && !isLocalhost) {
-    futuOption.disabled = true;
-    futuOption.textContent = "Futu OpenD (local only)";
+function normalizeDataSourceSelection() {
+  const availableSources = new Set([...dom.sourceSelect.options].map((option) => option.value));
+  if (!availableSources.has(state.source)) {
+    state.source = "auto";
   }
+  dom.sourceSelect.value = state.source;
 }
 
 function placeholderRow(symbol) {
@@ -1269,7 +1267,7 @@ function scheduleRefresh() {
 }
 
 function refreshIntervalMs() {
-  return state.source === "futu" ? FUTU_REFRESH_MS : REFRESH_MS;
+  return REFRESH_MS;
 }
 
 function sourceLabelFor(provider) {
@@ -1284,9 +1282,7 @@ function sourceLabelFor(provider) {
 }
 
 function updateRefreshHint() {
-  dom.refreshHint.textContent = state.source === "futu"
-    ? `Futu option ranking refreshes every ${FUTU_REFRESH_MS / 1000} seconds; selected stock quote checks every ${QUOTE_REFRESH_MS / 1000} seconds.`
-    : `Options refresh every ${REFRESH_MS / 1000} seconds; selected stock quote checks every ${QUOTE_REFRESH_MS / 1000} seconds.`;
+  dom.refreshHint.textContent = `Options refresh every ${REFRESH_MS / 1000} seconds; selected stock quote checks every ${QUOTE_REFRESH_MS / 1000} seconds.`;
 }
 
 function scheduleQuoteRefresh() {
@@ -1342,7 +1338,7 @@ dom.symbolSearch.addEventListener("keydown", (event) => {
 });
 dom.addSymbolButton.addEventListener("click", addSymbolFromSearch);
 
-configureLocalDataSources();
+normalizeDataSourceSelection();
 syncSymbolsInput();
 updateSymbolSuggestions();
 scheduleRefresh();
