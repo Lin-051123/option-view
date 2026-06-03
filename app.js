@@ -27,6 +27,7 @@ const LOCAL_SYMBOLS = [
   ["QCOM", "QUALCOMM Incorporated", "NASDAQ"],
   ["CRM", "Salesforce, Inc.", "NYSE"],
   ["ORCL", "Oracle Corporation", "NYSE"],
+  ["HPE", "Hewlett Packard Enterprise Company", "NYSE"],
   ["BA", "The Boeing Company", "NYSE"],
   ["GE", "GE Aerospace", "NYSE"],
   ["F", "Ford Motor Company", "NYSE"],

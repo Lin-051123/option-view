@@ -50,6 +50,7 @@ const companyProfiles = {
   COST: { name: "Costco Wholesale Corporation", exchange: "NASDAQ" },
   CRM: { name: "Salesforce, Inc.", exchange: "NYSE" },
   ORCL: { name: "Oracle Corporation", exchange: "NYSE" },
+  HPE: { name: "Hewlett Packard Enterprise Company", exchange: "NYSE" },
   BA: { name: "The Boeing Company", exchange: "NYSE" },
   GE: { name: "GE Aerospace", exchange: "NYSE" },
   F: { name: "Ford Motor Company", exchange: "NYSE" },
@@ -337,8 +338,28 @@ function cachedOptionQuote(symbol) {
 
 async function fetchCompanyProfile(symbol) {
   const fallback = companyProfiles[symbol] || { name: symbol, exchange: "NASDAQ" };
-  const nasdaqMarketCap = await fetchNasdaqMarketCap(symbol).catch(() => null);
-  return { ...fallback, marketCap: nasdaqMarketCap };
+  const [marketCap, yahooProfile] = await Promise.all([
+    fetchNasdaqMarketCap(symbol).catch(() => null),
+    fetchYahooProfile(symbol).catch(() => null)
+  ]);
+  return {
+    name: yahooProfile?.name || fallback.name,
+    exchange: yahooProfile?.exchange || fallback.exchange,
+    marketCap
+  };
+}
+
+async function fetchYahooProfile(symbol) {
+  const endpoint = `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(symbol)}&quotesCount=6&newsCount=0&listsCount=0`;
+  const payload = await fetchJson(endpoint);
+  const exact = (payload.quotes || []).find((quote) => normalizeDisplaySymbol(quote.symbol) === symbol);
+  if (!exact) {
+    return null;
+  }
+  return {
+    name: exact.shortname || exact.longname || symbol,
+    exchange: normalizeExchange(exact.exchange)
+  };
 }
 
 async function fetchNasdaqMarketCap(symbol) {
