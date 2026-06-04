@@ -1,6 +1,4 @@
 import { createServer } from "node:http";
-import { spawn } from "node:child_process";
-import { Socket } from "node:net";
 import { readFile } from "node:fs/promises";
 import { extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -77,12 +75,6 @@ const quoteCache = new Map();
 const quoteCacheTtlMs = 15 * 1000;
 const candleCache = new Map();
 const candleCacheTtlMs = 60 * 1000;
-const futuBridgePath = join(root, "futu_bridge.py");
-const futuPython = process.env.FUTU_PYTHON || "python3";
-const futuHost = process.env.FUTU_HOST || "127.0.0.1";
-const futuPort = Number(process.env.FUTU_PORT || 11111);
-const futuMaxExpirations = clamp(Number(process.env.FUTU_MAX_EXPIRATIONS || 6), 1, 12);
-const futuMaxContracts = clamp(Number(process.env.FUTU_MAX_OPTION_CONTRACTS || 240), 20, 1000);
 
 createServer(async (request, response) => {
   try {
@@ -103,16 +95,16 @@ createServer(async (request, response) => {
       await handleCandles(url, response);
       return;
     }
-    if (url.pathname === "/api/futu-status") {
-      await handleFutuStatus(response);
-      return;
-    }
     if (url.pathname === "/robots.txt") {
       await handleRobots(request, response);
       return;
     }
     if (url.pathname === "/sitemap.xml") {
       await handleSitemap(request, response);
+      return;
+    }
+    if (url.pathname.startsWith("/api/")) {
+      sendJson(response, 404, { error: "API route not found" });
       return;
     }
     await serveStatic(url, request, response);
@@ -156,11 +148,6 @@ async function handleOptionsVolume(url, response) {
     return;
   }
 
-  if ((url.searchParams.get("source") || "").toLowerCase() === "futu") {
-    await handleFutuOptionsVolume(symbols, maxExpirations, response);
-    return;
-  }
-
   const data = await mapWithConcurrency(symbols, 2, async (symbol) => {
     try {
       return await fetchOptionsForSymbol(symbol, maxExpirations);
@@ -190,10 +177,6 @@ async function handleQuote(url, response) {
     sendJson(response, 400, { error: "Invalid symbol" });
     return;
   }
-  if ((url.searchParams.get("source") || "").toLowerCase() === "futu") {
-    await handleFutuQuote(symbol, response);
-    return;
-  }
   try {
     const quote = await fetchQuoteForSymbol(symbol);
     sendJson(response, 200, {
@@ -208,156 +191,6 @@ async function handleQuote(url, response) {
       error: error.message || "Unable to load quote"
     });
   }
-}
-
-async function handleFutuStatus(response) {
-  try {
-    await assertFutuOpenDReachable();
-    const payload = await runFutuBridge({
-      action: "status",
-      host: futuHost,
-      port: futuPort
-    }, 15000);
-    sendJson(response, 200, {
-      provider: "futu-opend",
-      refreshedAt: new Date().toISOString(),
-      ...payload
-    });
-  } catch (error) {
-    sendJson(response, 200, {
-      provider: "futu-opend",
-      refreshedAt: new Date().toISOString(),
-      ok: false,
-      error: error.message || "Unable to connect to Futu OpenD"
-    });
-  }
-}
-
-async function handleFutuQuote(symbol, response) {
-  try {
-    await assertFutuOpenDReachable();
-    const payload = await runFutuBridge({
-      action: "quote",
-      host: futuHost,
-      port: futuPort,
-      symbols: [symbol]
-    }, 20000);
-    const quote = payload.data?.[0];
-    if (!quote) {
-      throw new Error(payload.error || `No Futu quote returned for ${symbol}`);
-    }
-    sendJson(response, 200, {
-      provider: "futu-opend-realtime-quote",
-      refreshedAt: new Date().toISOString(),
-      data: quote
-    });
-  } catch (error) {
-    sendJson(response, 502, {
-      provider: "futu-opend-realtime-quote",
-      refreshedAt: new Date().toISOString(),
-      error: error.message || "Unable to load Futu quote"
-    });
-  }
-}
-
-async function handleFutuOptionsVolume(symbols, maxExpirations, response) {
-  try {
-    await assertFutuOpenDReachable();
-    const payload = await runFutuBridge({
-      action: "options",
-      host: futuHost,
-      port: futuPort,
-      symbols,
-      maxExpirations: Math.min(maxExpirations, futuMaxExpirations),
-      maxContractsPerSymbol: futuMaxContracts
-    }, 240000);
-    sendJson(response, 200, {
-      provider: "futu-opend-realtime-options-adapter",
-      refreshedAt: new Date().toISOString(),
-      data: payload.data || [],
-      limits: payload.limits || {}
-    });
-  } catch (error) {
-    sendJson(response, 502, {
-      provider: "futu-opend-realtime-options-adapter",
-      refreshedAt: new Date().toISOString(),
-      error: error.message || "Unable to load Futu option data"
-    });
-  }
-}
-
-async function assertFutuOpenDReachable() {
-  const reachable = await tcpReachable(futuHost, futuPort, 1500);
-  if (!reachable) {
-    throw new Error(`Futu OpenD is not reachable at ${futuHost}:${futuPort}. Start Futu OpenD and sign in before using Futu OpenD (local).`);
-  }
-}
-
-function tcpReachable(host, port, timeoutMs) {
-  return new Promise((resolve) => {
-    const socket = new Socket();
-    let settled = false;
-    const finish = (value) => {
-      if (settled) {
-        return;
-      }
-      settled = true;
-      socket.destroy();
-      resolve(value);
-    };
-    socket.setTimeout(timeoutMs);
-    socket.once("connect", () => finish(true));
-    socket.once("timeout", () => finish(false));
-    socket.once("error", () => finish(false));
-    socket.connect(port, host);
-  });
-}
-
-function runFutuBridge(payload, timeoutMs) {
-  return new Promise((resolve, reject) => {
-    const child = spawn(futuPython, [futuBridgePath], {
-      cwd: root,
-      stdio: ["pipe", "pipe", "pipe"]
-    });
-    let stdout = "";
-    let stderr = "";
-    const timer = setTimeout(() => {
-      child.kill("SIGTERM");
-      reject(new Error("Futu bridge timed out"));
-    }, timeoutMs);
-    child.stdout.on("data", (chunk) => {
-      stdout += chunk;
-    });
-    child.stderr.on("data", (chunk) => {
-      stderr += chunk;
-    });
-    child.on("error", (error) => {
-      clearTimeout(timer);
-      reject(error);
-    });
-    child.on("close", (code) => {
-      clearTimeout(timer);
-      try {
-        const parsed = JSON.parse(stdout || "{}");
-        if (parsed.ok === false) {
-          reject(new Error(parsed.error || "Futu bridge returned an error"));
-          return;
-        }
-        if (code !== 0) {
-          reject(new Error((stderr || `Futu bridge exited with code ${code}`).trim()));
-          return;
-        }
-        resolve(parsed);
-      } catch (error) {
-        if (code !== 0) {
-          reject(new Error((stderr || stdout || `Futu bridge exited with code ${code}`).trim()));
-          return;
-        }
-        reject(new Error(`Invalid Futu bridge response: ${error.message}`));
-      }
-    });
-    child.stdin.end(JSON.stringify(payload));
-  });
 }
 
 async function handleCandles(url, response) {

@@ -22,12 +22,6 @@ http://localhost:4173
 
 The browser refreshes option data every 60 seconds when Live API mode is enabled. Live mode does not silently replace failed API requests with synthetic values.
 
-## Futu OpenD Status
-
-Futu OpenD is not shown in the dashboard anymore. The app now defaults to the live/delayed market-data adapter, because Futu requires an authenticated local OpenD session before it can provide quote data.
-
-The Futu bridge files remain in the project as archived optional integration code, but the user-facing data source menu does not offer Futu mode.
-
 ## Public Google Indexing
 
 This app is prepared for Google indexing, but Google cannot index `localhost`. To make it searchable:
@@ -96,8 +90,6 @@ Expected options response:
 ## Data Source Notes
 
 `server.mjs` uses Yahoo Finance search for user-entered symbol lookup, Nasdaq summary data for market cap, and Cboe delayed quotes for option-chain reads. The option numbers are real delayed market-data values from the upstream endpoint; they are not real-time exchange feeds and should be labeled as delayed.
-
-The optional archived Futu bridge can still be called manually with `source=futu`, but it is not exposed in the dashboard.
 
 For production real-time data:
 

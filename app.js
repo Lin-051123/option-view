@@ -295,7 +295,7 @@ async function fetchBackendData(symbols) {
   const params = new URLSearchParams({
     symbols: symbols.join(","),
     vendor: "tradingview",
-    source: state.source === "futu" ? "futu" : "cboe",
+    source: "cboe",
     maxExpirations: "52",
     t: String(Date.now())
   });
@@ -320,7 +320,7 @@ async function fetchBackendData(symbols) {
 async function fetchSelectedQuote(symbol) {
   const params = new URLSearchParams({
     symbol,
-    source: state.source === "futu" ? "futu" : "cboe",
+    source: "cboe",
     t: String(Date.now())
   });
   const response = await fetch(`./api/quote?${params.toString()}`, {
@@ -569,9 +569,7 @@ function renderSelectedQuote(row) {
     : "";
   const change = [priceChange, percentChange].filter(Boolean).join(" ");
   const quoteTime = displayRow.lastTradeTime || displayRow.quoteTimestamp;
-  const source = displayRow.quoteSource === "futu-opend-realtime-quote"
-    ? "Futu OpenD real-time quote"
-    : displayRow.quoteSource === "cboe-options-chain-cache"
+  const source = displayRow.quoteSource === "cboe-options-chain-cache"
     ? "Cboe options-chain quote cache"
     : "Cboe delayed stock quote";
   const stale = displayRow.quoteStale
@@ -742,9 +740,7 @@ function renderDataNotice(row) {
     return;
   }
   const timestamp = state.sourceTimestamp ? ` Refreshed ${new Date(state.sourceTimestamp).toLocaleString("en-US")}.` : "";
-  const disclaimer = state.source === "futu"
-    ? "Futu OpenD mode uses your local Futu connection. Real-time availability depends on your Futu market-data permissions; option ranking refreshes from subscribed option quotes."
-    : state.source === "demo"
+  const disclaimer = state.source === "demo"
     ? "Demo mode uses synthetic data and should not be used for trading."
     : "Live mode uses Cboe delayed options-chain data; no synthetic fallback is shown.";
   const rowError = row.error ? ` ${row.error}` : "";
@@ -1272,9 +1268,6 @@ function refreshIntervalMs() {
 
 function sourceLabelFor(provider) {
   const value = String(provider || "").toLowerCase();
-  if (value.includes("futu")) {
-    return "Futu OpenD real-time";
-  }
   if (value.includes("cboe")) {
     return "Cboe delayed";
   }
