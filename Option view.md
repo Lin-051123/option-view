@@ -17,10 +17,10 @@ node server.mjs
 Then open:
 
 ```text
-http://localhost:4173
+http://localhost:4174
 ```
 
-The browser refreshes option data every 60 seconds when Live API mode is enabled. Live mode does not silently replace failed API requests with synthetic values.
+The browser refreshes option data every 30 seconds when Live API mode is enabled. Live mode does not silently replace failed API requests with synthetic values.
 
 ## Public Google Indexing
 
@@ -97,7 +97,7 @@ For production real-time data:
 2. Replace the adapter inside `server.mjs` with your licensed TradingView, broker, OPRA, or market-data provider.
 3. Return full `contracts` arrays so the UI can show many expirations and auto-aggregate calls, puts, totals, and ratios.
 
-Real-time accuracy depends on the data provider. The frontend polls every 60 seconds, but delayed upstream data will still be delayed.
+Real-time accuracy depends on the data provider. The frontend polls every 30 seconds, but delayed upstream data will still be delayed.
 
 ## Static Hosting Note
 

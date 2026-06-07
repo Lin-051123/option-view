@@ -3,7 +3,7 @@ const DEFAULT_SYMBOLS = [
   "INTC", "COIN", "MSTR", "NFLX", "GOOGL", "AVGO", "ARM", "SMCI", "APP", "RIVN",
   "SOFI", "HOOD", "JPM", "BAC", "XOM"
 ];
-const REFRESH_MS = 60000;
+const REFRESH_MS = 30000;
 const QUOTE_REFRESH_MS = 5000;
 const TRADINGVIEW_SCRIPT_URL = "https://s3.tradingview.com/tv.js";
 const LOCAL_SYMBOLS = [
@@ -138,6 +138,14 @@ const dom = {
   candleMeta: document.querySelector("#candleMeta"),
   candleChart: document.querySelector("#candleChart"),
   squeezeSignals: document.querySelector("#squeezeSignals"),
+  marketTotalVolume: document.querySelector("#marketTotalVolume"),
+  marketCallVolume: document.querySelector("#marketCallVolume"),
+  marketPutVolume: document.querySelector("#marketPutVolume"),
+  marketCallShare: document.querySelector("#marketCallShare"),
+  marketPutCallRatio: document.querySelector("#marketPutCallRatio"),
+  marketVolumeBalance: document.querySelector("#marketVolumeBalance"),
+  marketCallShareBar: document.querySelector("#marketCallShareBar"),
+  marketPutShareBar: document.querySelector("#marketPutShareBar"),
   rankingBody: document.querySelector("#rankingBody"),
   chartTitle: document.querySelector("#chartTitle"),
   chartLine: document.querySelector("#chartLine"),
@@ -974,6 +982,7 @@ function renderVolumeRanking() {
       };
     })
     .sort((a, b) => b.totalVolume - a.totalVolume);
+  renderMarketVolumeIndex(rows);
 
   if (!rows.length) {
     const emptyRow = document.createElement("tr");
@@ -1001,6 +1010,27 @@ function renderVolumeRanking() {
     appendCell(tableRow, formatMarketCap(item.row.marketCap), "numeric");
     dom.rankingBody.append(tableRow);
   });
+}
+
+function renderMarketVolumeIndex(rows) {
+  const callVolume = rows.reduce((sum, item) => sum + item.callVolume, 0);
+  const putVolume = rows.reduce((sum, item) => sum + item.putVolume, 0);
+  const totalVolume = callVolume + putVolume;
+  const callShare = totalVolume ? callVolume / totalVolume : 0;
+  const putShare = totalVolume ? putVolume / totalVolume : 0;
+  const putCallRatio = callVolume ? putVolume / callVolume : 0;
+
+  dom.marketTotalVolume.textContent = number(totalVolume);
+  dom.marketCallVolume.textContent = number(callVolume);
+  dom.marketPutVolume.textContent = number(putVolume);
+  dom.marketCallShare.textContent = (callShare * 100).toFixed(1);
+  dom.marketPutCallRatio.textContent = putCallRatio.toFixed(2);
+  dom.marketCallShareBar.style.width = `${callShare * 100}%`;
+  dom.marketPutShareBar.style.width = `${putShare * 100}%`;
+  dom.marketVolumeBalance.setAttribute(
+    "aria-label",
+    `Call volume ${(callShare * 100).toFixed(1)} percent; put volume ${(putShare * 100).toFixed(1)} percent`
+  );
 }
 
 function appendCell(row, text, className = "") {
@@ -1155,6 +1185,7 @@ function renderEmpty() {
   dom.putAxisMax.textContent = "-";
   dom.callAxisMid.textContent = "-";
   dom.callAxisMax.textContent = "-";
+  renderMarketVolumeIndex([]);
 }
 
 async function lookupSymbols(query) {

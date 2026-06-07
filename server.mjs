@@ -4,7 +4,8 @@ import { extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = fileURLToPath(new URL(".", import.meta.url));
-const port = Number(process.env.PORT || 4173);
+const port = Number(process.env.PORT || 4174);
+const host = process.env.HOST || "0.0.0.0";
 const mimeTypes = {
   ".html": "text/html; charset=utf-8",
   ".css": "text/css; charset=utf-8",
@@ -70,7 +71,7 @@ const companyProfiles = {
   QQQ: { name: "Invesco QQQ Trust", exchange: "NASDAQ" }
 };
 const symbolCache = new Map();
-const cacheTtlMs = 5 * 60 * 1000;
+const cacheTtlMs = 30 * 1000;
 const quoteCache = new Map();
 const quoteCacheTtlMs = 15 * 1000;
 const candleCache = new Map();
@@ -111,7 +112,7 @@ createServer(async (request, response) => {
   } catch (error) {
     sendJson(response, 500, { error: error.message || "Server error" });
   }
-}).listen(port, () => {
+}).listen(port, host, () => {
   console.log(`option view running at http://localhost:${port}`);
 });
 
@@ -232,7 +233,9 @@ async function fetchOptionsForSymbol(symbol, maxExpirations) {
   const contracts = data.options
     .map((contract) => normalizeOptionContract(symbol, contract))
     .filter(Boolean);
+  const today = isoDate(new Date());
   const allowedExpirations = unique(contracts.map((contract) => contract.expiration))
+    .filter((expiration) => expiration >= today)
     .sort()
     .slice(0, maxExpirations);
 

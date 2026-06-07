@@ -85,7 +85,7 @@
           </label>
           <div>
             <strong>Live refresh</strong>
-            <p id="refreshHint">Options refresh every 60 seconds; selected stock quote checks every 5 seconds.</p>
+            <p id="refreshHint">Options refresh every 30 seconds; selected stock quote checks every 5 seconds.</p>
           </div>
         </div>
 
@@ -150,8 +150,40 @@
           <section class="ranking-section" aria-label="Option volume ranking">
             <div class="ranking-header">
               <div>
+                <h3>Market Option Volume Index</h3>
+                <p class="subline">Call-side and put-side volume across the 25-stock watchlist.</p>
+              </div>
+            </div>
+            <dl class="volume-index">
+              <div class="volume-index-item">
+                <dt>Total Volume</dt>
+                <dd id="marketTotalVolume">0</dd>
+              </div>
+              <div class="volume-index-item call-volume-item">
+                <dt>Call-side Volume</dt>
+                <dd id="marketCallVolume">0</dd>
+              </div>
+              <div class="volume-index-item put-volume-item">
+                <dt>Put-side Volume</dt>
+                <dd id="marketPutVolume">0</dd>
+              </div>
+              <div class="volume-index-item">
+                <dt>Call Share Index</dt>
+                <dd id="marketCallShare">0.0</dd>
+              </div>
+              <div class="volume-index-item">
+                <dt>Put-Call Ratio</dt>
+                <dd id="marketPutCallRatio">0.00</dd>
+              </div>
+            </dl>
+            <div class="volume-balance" id="marketVolumeBalance" aria-label="Call and put volume balance">
+              <span class="volume-balance-call" id="marketCallShareBar"></span>
+              <span class="volume-balance-put" id="marketPutShareBar"></span>
+            </div>
+            <div class="ranking-header ranking-table-header">
+              <div>
                 <h3>Option Volume Ranking</h3>
-                <p class="subline">Top 25 stocks ranked by total option volume across all loaded expirations.</p>
+                <p class="subline">Ranked by cumulative option volume across all loaded expirations.</p>
               </div>
             </div>
             <div class="ranking-scroll">
